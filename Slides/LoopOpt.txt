@@ -1,0 +1,145 @@
+--
+Loop inversion
+--
+
+while (cond) {				| Lb: if (!cond) goto Lo
+	S				| 	S
+}					| 	goto Lb
+->					| Lo:
+
+if (cond) // Eliminate?	if cond is 	| if !cond goto Lo:
+	  // guaranteed	to be true
+	  // first time.
+	do {				| Lb:
+		S			| 	S
+	} while (cond)			| if (cond) goto Lb
+					| Lo:
+
+Number of branches in the transformed code are nearly half of the
+original.
+
+--- 
+Loop Unrolling/Peeling
+--
+while (cond){
+	S
+}
+
+// for (i=0;i<n;i++){
+//	S
+// }
+-->
+while (cond){
+	S
+	if (!cond) break; // if the cond need not be checked => great.
+	S
+}
+// n' = K*(n/K)
+// for (i=0;i<n';i++){
+//	[S; i++; ] // repeated K-1 times.
+//	S; 
+// }
+// for( ;i < n; i++) {S} 
+
+
+--
+Loop fusion
+--
+
+for (i=0;i<n;++i){
+	S1;
+}
+for (i=0;i<n;++i){
+	S2;
+}
+-->
+// If S1 and S2 are independent
+for (i=0;i<n;++i){
+	S1;
+	S2;
+}
+// BB size increases; may help in improving pipelining; reduces overheads
+// of loops.
+
+// For most loop opt, we discuss:
+// The loop index does not change in between.
+// The upper limit (n) is loop-invariant.
+
+--
+Strip Mining
+--
+for (i=0;i<n;i++)
+	A[i]=B[i]+C[i];
+-->
+for (j=0;j<n;j+=4){
+	for (i=j;i < j+4; ++i){
+		A[i]=B[i]+C[i];
+	}
+}
+for (;i<n;++i){
+	A[i]=B[i]+C[i];
+}
+
+--
+Vectorisation
+--
+for (j=0;j<1000;j+=4){
+	for (i=j; i<j+4; ++i){
+		A[i]=B[i]+C[i];
+	}
+-->
+for (j=0;j<1000;j+=4){
+	vec_add(A, B, C, j, 4)
+
+	// Assuming the size of the vector unit is 4 -- a h/w constraint.
+--
+Loop interchange
+--
+for (i=0; i<n; ++i)
+	for (j=0; j<m; ++j)
+		S; // = A[j][i]
+-->
+// Different iterations of S are independent of each other.
+for (j=0; j<m; ++j)
+	for (i=0; i<n; ++i)
+		S; // = A[j][i]
+
+// To improve the locality of memory accesses (cache).
+
+// Assume: Perfectly nested loops.
+	// Say S[i1,j1], executes before S[i2, j2] // [i1, j1] <= [i2, j2]
+	// S[i2,j2] if it depends on S[i1, j1] => cannot interchange.
+
+--
+Loop reversal
+--
+for (j=0;j<n;++j){
+	for (i=0;i<n;++i){
+		S // A[n-i], A[j]
+	}
+
+for (j=0;j<n;++j){
+	for (i=n-1;i>=0; i--){
+		S // A[n-i], A[j]
+	}
+
+--
+Loop tiling.
+--
+for (i=0;i<n;++i)
+	for (j=0;j<n;++j)
+		S
+
+-->
+for (i1=0;i1<n/Bi; i1+=Bi)
+	for (i=i1; i<i1+Bi; ++i)
+		for (j1=0;j<n/Bj;j+=Bj)
+			for (j=j1;j<j1+Bj;++j)
+				S
+-->
+for (i1=0;i1<n/Bi; i1+=Bi)
+	for (j1=0;j<n/Bj;j+=Bj)
+		for (i=i1; i<i1+Bi; ++i)
+			for (j=j1;j<j1+Bj;++j)
+				S
+//No dependence between different instances of S.
